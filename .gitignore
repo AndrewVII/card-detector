@@ -4,3 +4,4 @@ models
 .env
 dataset/source_images
 dataset/videos
+output

@@ -1,81 +1,77 @@
-# scripts/card_detector.py
-
 import torch
-from torchvision.models.detection import (
-    fasterrcnn_resnet50_fpn,
-    FasterRCNN_ResNet50_FPN_Weights,
-)
-from torchvision.transforms import functional as F
 import cv2
-import os
-
-# Set the model path
-model_path = os.path.join(os.path.dirname(__file__), "../models/mtg_card_detector.pth")
-
-# Define the model architecture with the same setup as used during training
-weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1
-model = fasterrcnn_resnet50_fpn(weights=weights)
-num_classes = 2  # Background + MTG Card
-in_features = model.roi_heads.box_predictor.cls_score.in_features
-model.roi_heads.box_predictor = torch.nn.Linear(in_features, num_classes)
-
-# Load the trained model weights
-state_dict = torch.load(model_path)
-
-# Filter out unexpected keys
-new_state_dict = {}
-for k, v in state_dict.items():
-    if k in model.state_dict() and model.state_dict()[k].shape == v.shape:
-        new_state_dict[k] = v
-    else:
-        print(f"Skipping key {k}")
-
-model.load_state_dict(new_state_dict, strict=False)
-
-model.eval()
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-model.to(device)
+import numpy as np
+import matplotlib.pyplot as plt
+from detectron2.config import get_cfg
+from detectron2.engine import DefaultPredictor
+from detectron2.utils.visualizer import Visualizer
+from detectron2.data import MetadataCatalog
+from detectron2 import model_zoo
 
 
-# Function to detect cards in an image
-def detect_cards(image):
-    image_tensor = F.to_tensor(image).unsqueeze(0).to(device)
-    with torch.no_grad():
-        try:
-            predictions = model(image_tensor)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return {"boxes": []}
-    return predictions[0]  # Get the first image's predictions
+def init_config():
+    model_weights_path = "output/model_final.pth"
+
+    cfg = get_cfg()
+    cfg.merge_from_file(
+        model_zoo.get_config_file(
+            "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"
+        )
+    )
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+    cfg.MODEL.WEIGHTS = model_weights_path
+    cfg.DATASETS.TEST = ("my_dataset",)
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
+    cfg.MODEL.DEVICE = "cuda"
+    return cfg
 
 
-# Capture video from webcam using a different backend
-video_capture = cv2.VideoCapture(0)
+def initialize_webcam():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        exit()
 
-while True:
-    ret, frame = video_capture.read()
+    return cap
+
+
+def draw_predictions_on_frame(cap, predictor, cfg):
+    ret, frame = cap.read()
     if not ret:
-        print("Failed to grab frame")
-        break
+        print("Error: Failed to capture image")
+        return None
 
-    # Convert frame to RGB (OpenCV uses BGR by default)
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    outputs = predictor(frame)
+    v = Visualizer(
+        frame[:, :, ::-1], MetadataCatalog.get(cfg.DATASETS.TEST[0]), scale=1
+    )
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
 
-    # Detect cards in the current frame
-    predictions = detect_cards(frame_rgb)
+    return out.get_image()[:, :, ::-1]
 
-    # Draw bounding boxes around detected cards
-    for box in predictions["boxes"]:
-        x1, y1, x2, y2 = box.int()
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
-    # Display the frame
-    cv2.imshow("Video", frame)
+def main():
+    config = init_config()
+    predictor = DefaultPredictor(config)
+    cap = initialize_webcam()
+    cur_frame_num = 0
 
-    # Break the loop on 'q' key press
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+    while True:
+        cur_frame = cap.read()[1]
+        if cur_frame_num == 0:
+            cur_frame = draw_predictions_on_frame(cap, predictor, config)
+            if cur_frame is None:
+                break
+        cv2.imshow("Webcam Detection", cur_frame)
 
-# Release the capture and close windows
-video_capture.release()
-cv2.destroyAllWindows()
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+
+        cur_frame_num = (cur_frame_num + 1) % 5
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
