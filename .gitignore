@@ -6,3 +6,6 @@ dataset/source_images
 dataset/videos
 output
 yolo/data
+yolo/models
+yolo/training_runs
+yolov8n.pt

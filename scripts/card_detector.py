@@ -1,8 +1,10 @@
 import cv2
 from ultralytics import YOLO
+from dotenv import load_dotenv
+import os
 
 
-def load_model(weights="best.pt"):
+def load_model(weights):
     model = YOLO(weights)
     return model
 
@@ -17,9 +19,11 @@ def draw_results(frame, results, model):
         for box in result.boxes:
             bbox = box.xyxy[0].cpu().numpy()  # bounding box coordinates
             conf = box.conf[0].cpu().numpy()  # confidence score
-            cls = int(box.cls[0].cpu().numpy())  # class id
 
-            print(model.names[cls])
+            if conf < 0.2:
+                continue
+
+            cls = int(box.cls[0].cpu().numpy())  # class id
 
             # Draw bounding box
             x1, y1, x2, y2 = map(int, bbox)
@@ -46,7 +50,12 @@ def draw_results(frame, results, model):
 
 
 if __name__ == "__main__":
-    model = load_model("best.pt")
+    load_dotenv()
+    file_path = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(file_path, "..", "yolo", "models")
+    model_name = os.getenv("MODEL_NAME")
+
+    model = load_model(f"{model_path}/{model_name}.pt")
     cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
