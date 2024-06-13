@@ -70,3 +70,7 @@ if __name__ == "__main__":
         video_path = download_youtube_video(YOUTUBE_URL, video_output_dir)
         extract_random_frames(video_path, NUM_FRAMES, frames_output_dir, image_num)
         image_num += NUM_FRAMES
+
+    for file in os.listdir(video_output_dir):
+        os.remove(os.path.join(video_output_dir, file))
+    os.rmdir(video_output_dir)
