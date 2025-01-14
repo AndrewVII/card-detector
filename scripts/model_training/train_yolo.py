@@ -1,6 +1,7 @@
-from ultralytics import YOLO
 import os
+
 from dotenv import load_dotenv
+from ultralytics import YOLO
 
 
 def train_yolo(yolo_path, output_model_name):
@@ -8,7 +9,7 @@ def train_yolo(yolo_path, output_model_name):
 
     model.train(
         data=f"{yolo_path}/yolo_config.yaml",
-        epochs=10,
+        epochs=100,
         project=f"{yolo_path}/training_runs",
     )
     model.val()
@@ -25,4 +26,5 @@ if __name__ == "__main__":
 
     os.system(f"rm -rf {yolo_path}/training_runs/*")
 
+    train_yolo(yolo_path, output_model_name)
     train_yolo(yolo_path, output_model_name)

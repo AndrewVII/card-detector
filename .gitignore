@@ -1,11 +1,9 @@
 .vs
 env/
-models
+/models/
 .env
-dataset/source_images
-dataset/videos
+data
 output
 yolo/data
-yolo/models
 yolo/training_runs
 yolov8n.pt

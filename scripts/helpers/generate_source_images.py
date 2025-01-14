@@ -8,7 +8,7 @@ YOUTUBE_URLS = [
     "https://www.youtube.com/watch?v=r-_VLSiP6ww",
     "https://www.youtube.com/watch?v=Z7zfUkWKi-Q",
 ]
-OUTPUT_PATH = "dataset"
+OUTPUT_PATH = "data"
 OUTPUT_VIDEO_PATH = "videos"
 OUTPUT_FRAMES_PATH = "source_images"
 NUM_FRAMES = 20
