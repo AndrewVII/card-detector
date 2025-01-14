@@ -1,52 +1,66 @@
-import torch
 import cv2
-import numpy as np
-from detectron2.config import get_cfg
-from detectron2.engine import DefaultPredictor
-from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog
-from detectron2 import model_zoo
+from ultralytics import YOLO
 from dotenv import load_dotenv
 import os
 
 
-def init_config(model):
-    model_weights_path = "output/model_final.pth"
-
-    cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file(model))
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.75
-    cfg.MODEL.WEIGHTS = model_weights_path
-    cfg.DATASETS.TEST = ("my_dataset",)
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
-    cfg.MODEL.DEVICE = "cuda"
-    return cfg
+def load_model(weights):
+    model = YOLO(weights)
+    return model
 
 
-def initialize_webcam():
+def run_inference(model, frame):
+    results = model(frame)
+    return results
+
+
+def draw_results(frame, results, model):
+    for result in results:
+        for box in result.boxes:
+            bbox = box.xyxy[0].cpu().numpy()  # bounding box coordinates
+            conf = box.conf[0].cpu().numpy()  # confidence score
+
+            if conf < 0.2:
+                continue
+
+            cls = int(box.cls[0].cpu().numpy())  # class id
+
+            # Draw bounding box
+            x1, y1, x2, y2 = map(int, bbox)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            # Draw label
+            label = f"{model.names[cls]} {conf:.2f}"
+            label_size, base_line = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+            )
+            top = max(y1, label_size[1])
+            cv2.rectangle(
+                frame,
+                (x1, top - label_size[1]),
+                (x1 + label_size[0], top + base_line),
+                (255, 255, 255),
+                cv2.FILLED,
+            )
+            cv2.putText(
+                frame, label, (x1, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1
+            )
+
+    return frame
+
+
+if __name__ == "__main__":
+    load_dotenv()
+    file_path = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(file_path, "..", "yolo", "models")
+    model_name = os.getenv("MODEL_NAME")
+
+    model = load_model(f"{model_path}/{model_name}.pt")
     cap = cv2.VideoCapture(0)
+
     if not cap.isOpened():
         print("Error: Could not open webcam.")
         exit()
-    return cap
-
-
-def draw_predictions_on_frame(frame, predictor, cfg):
-    outputs = predictor(frame)
-    v = Visualizer(
-        frame[:, :, ::-1], MetadataCatalog.get(cfg.DATASETS.TEST[0]), scale=1
-    )
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    return out.get_image()[:, :, ::-1]
-
-
-def main():
-    load_dotenv()
-    model_name = os.getenv("MODEL")
-    config = init_config(model_name)
-    predictor = DefaultPredictor(config)
-    cap = initialize_webcam()
-    cur_frame_num = 0
 
     while True:
         ret, frame = cap.read()
@@ -54,27 +68,13 @@ def main():
             print("Error: Failed to capture image")
             break
 
-        if cur_frame_num == 0:
-            result_frame = draw_predictions_on_frame(frame, predictor, config)
-            if result_frame is None:
-                break
-        else:
-            result_frame = frame
+        results = run_inference(model, frame)
+        result_frame = draw_results(frame, results, model)
 
-        # Calculate and display FPS
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        print(fps)
-
-        cv2.imshow("Webcam Detection", result_frame)
+        cv2.imshow("YOLOv8 Real-Time Detection", result_frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        cur_frame_num = (cur_frame_num + 1) % 1
-
     cap.release()
     cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
